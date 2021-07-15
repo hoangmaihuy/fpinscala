@@ -12,11 +12,23 @@ object Calculator extends CalculatorInterface:
  import Expr.*
 
   def computeValues(
-      namedExpressions: Map[String, Signal[Expr]]): Map[String, Signal[Double]] =
-    ???
+      namedExpressions: Map[String, Signal[Expr]]): Map[String, Signal[Double]] = {
+    namedExpressions.map { (name, exprSignal) =>
+      (name, Signal.apply(eval(exprSignal(), namedExpressions.removed(name))))
+    }
+  }
 
-  def eval(expr: Expr, references: Map[String, Signal[Expr]])(using Signal.Caller): Double =
-    ???
+
+  def eval(expr: Expr, references: Map[String, Signal[Expr]])(using Signal.Caller): Double = {
+    expr match {
+      case Expr.Literal(x) => x
+      case Expr.Ref(name) => eval(getReferenceExpr(name, references), references.removed(name))
+      case Expr.Plus(a, b) => eval(a, references) + eval(b, references)
+      case Expr.Minus(a, b) => eval(a, references) - eval(b, references)
+      case Expr.Times(a, b) => eval(a, references) * eval(b, references)
+      case Expr.Divide(a, b) => eval(a, references) / eval(b, references)
+    }
+  }
 
   /** Get the Expr for a referenced variables.
    *  If the variable is not known, returns a literal NaN.
