@@ -17,6 +17,11 @@ class ReductionsSuite extends munit.FunSuite:
   }
 
 
+  test("parLineOfSight should correctly handle an array of size 4") {
+    val output = new Array[Float](4)
+    parLineOfSight(Array[Float](0f, 1f, 8f, 9f), output, 2)
+    assertEquals(output.toList, List(0f, 1f, 4f, 4f))
+  }
 
 
   /*******************************
@@ -116,6 +121,38 @@ class ReductionsSuite extends munit.FunSuite:
     check(").", false)
   }
 
+  test("parBalance should work for empty string") {
+    def check(input: String, expected: Boolean) =
+      assert(parBalance(input.toArray, 1) == expected,
+        s"balance($input) should be $expected")
+
+    check("", true)
+  }
+
+  test("parBalance should work for string of length 1") {
+    def check(input: String, expected: Boolean) =
+      assert(parBalance(input.toArray, 1) == expected,
+        s"balance($input) should be $expected")
+
+    check("(", false)
+    check(")", false)
+    check(".", true)
+  }
+
+  test("parBalance should work for string of length 2") {
+    def check(input: String, expected: Boolean) =
+      assert(parBalance(input.toArray, 1) == expected,
+        s"balance($input) should be $expected")
+
+    check("()", true)
+    check(")(", false)
+    check("((", false)
+    check("))", false)
+    check(".)", false)
+    check(".(", false)
+    check("(.", false)
+    check(").", false)
+  }
 
   import scala.concurrent.duration.*
   override val munitTimeout = 10.seconds
