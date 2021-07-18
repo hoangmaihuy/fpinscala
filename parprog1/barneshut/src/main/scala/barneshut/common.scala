@@ -44,31 +44,65 @@ sealed abstract class Quad extends QuadInterface:
   def insert(b: Body): Quad
 
 case class Empty(centerX: Float, centerY: Float, size: Float) extends Quad:
-  def massX: Float = ???
-  def massY: Float = ???
-  def mass: Float = ???
-  def total: Int = ???
-  def insert(b: Body): Quad = ???
+  def massX: Float = centerX
+  def massY: Float = centerY
+  def mass: Float = 0f
+  def total: Int = 0
+  def insert(b: Body): Quad = Leaf(
+    centerX,
+    centerY,
+    size,
+    coll.Seq[Body](b)
+  )
 
 case class Fork(
   nw: Quad, ne: Quad, sw: Quad, se: Quad
 ) extends Quad:
-  val centerX: Float = ???
-  val centerY: Float = ???
-  val size: Float = ???
-  val mass: Float = ???
-  val massX: Float = ???
-  val massY: Float = ???
-  val total: Int = ???
+  val centerX: Float = nw.centerX + nw.size / 2f
+  val centerY: Float = nw.centerY + nw.size / 2f
+  val size: Float = nw.size * 2f
+  val mass: Float = nw.mass + ne.mass + sw.mass + se.mass
+  val massX: Float = if mass != 0 then
+    (nw.massX * nw.mass + ne.massX * ne.mass + sw.massX * sw.mass + se.massX * se.mass) / mass
+  else centerX
 
-  def insert(b: Body): Fork =
-    ???
+  val massY: Float = if mass != 0 then
+    (nw.massY * nw.mass + ne.massY * ne.mass + sw.massY * sw.mass + se.massY * se.mass) / mass
+  else centerY
+
+  val total: Int = nw.total + ne.total + sw.total + se.total
+
+  def insert(b: Body): Fork = {
+    if b.x <= centerX && b.y <= centerY then Fork(nw.insert(b), ne, sw, se)
+    else if b.y <= centerY then Fork(nw, ne.insert(b), sw, se)
+    else if b.x <= centerX then Fork(nw, ne, sw.insert(b), se)
+    else Fork(nw, ne, sw, se.insert(b))
+  }
 
 case class Leaf(centerX: Float, centerY: Float, size: Float, bodies: coll.Seq[Body])
 extends Quad:
-  val (mass, massX, massY) = (??? : Float, ??? : Float, ??? : Float)
-  val total: Int = ???
-  def insert(b: Body): Quad = ???
+  val mass = bodies.map(_.mass).sum
+  val massX = bodies.map(b => b.x * b.mass).sum / mass
+  val massY = bodies.map(b => b.y * b.mass).sum / mass
+  val total: Int = bodies.length
+  def insert(b: Body): Quad = {
+    if size <= minimumSize then
+      Leaf(centerX, centerY, size, bodies.appended(b))
+    else {
+      val newSize = size / 2
+      val halfNewSize = newSize / 2
+      bodies.appended(b).foldLeft {
+        Fork(
+          Empty(centerX - halfNewSize, centerY - halfNewSize, newSize),
+          Empty(centerX + halfNewSize, centerY - halfNewSize, newSize),
+          Empty(centerX - halfNewSize, centerY + halfNewSize, newSize),
+          Empty(centerX + halfNewSize, centerY + halfNewSize, newSize)
+        )
+      } {
+        (quad, body) => quad.insert(body)
+      }
+    }
+  }
 
 def minimumSize = 0.00001f
 
@@ -112,13 +146,22 @@ class Body(val mass: Float, val x: Float, val y: Float, val xspeed: Float, val y
         netforcey += dforcey
 
     def traverse(quad: Quad): Unit = (quad: Quad) match
-      case Empty(_, _, _) =>
+      case Empty(_, _, _) => ()
         // no force
-      case Leaf(_, _, _, bodies) =>
+      case Leaf(_, _, _, bodies) => bodies.foreach(b => addForce(b.mass, b.x, b.y))
         // add force contribution of each body by calling addForce
-      case Fork(nw, ne, sw, se) =>
+      case Fork(nw, ne, sw, se) => {
         // see if node is far enough from the body,
         // or recursion is needed
+        if quad.size / distance(x, y, quad.massX, quad.massY) < theta then
+          addForce(quad.mass, quad.massX, quad.massY)
+        else {
+          traverse(nw)
+          traverse(ne)
+          traverse(sw)
+          traverse(se)
+        }
+      }
 
     traverse(quad)
 
@@ -138,13 +181,21 @@ class SectorMatrix(val boundaries: Boundaries, val sectorPrecision: Int) extends
   for i <- 0 until matrix.length do matrix(i) = ConcBuffer()
 
   def +=(b: Body): SectorMatrix =
-    ???
+    val x = boundaries.minX max b.x min boundaries.maxX
+    val y = boundaries.minY max b.y min boundaries.maxY
+    val bucketX = Math.floor((x - boundaries.minX) / sectorSize).toInt
+    val bucketY = Math.floor((y - boundaries.minY) / sectorSize).toInt
+    this(bucketX, bucketY) += b
     this
 
   def apply(x: Int, y: Int) = matrix(y * sectorPrecision + x)
 
-  def combine(that: SectorMatrix): SectorMatrix =
-    ???
+  def combine(that: SectorMatrix): SectorMatrix = {
+    for i <- 0 until matrix.length do {
+      matrix(i) = matrix(i) combine that.matrix(i)
+    }
+    this
+  }
 
   def toQuad(parallelism: Int): Quad =
     def BALANCING_FACTOR = 4

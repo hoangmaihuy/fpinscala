@@ -67,6 +67,17 @@ class BarnesHutSuite extends munit.FunSuite:
         fail("Empty.insert() should have returned a Leaf, was $inserted")
   }
 
+  test("Leaf.insert(b) should return a new Fork if size > minimumSize") {
+    val b = Body(123f, 18f, 26f, 0f, 0f)
+    val quad = Leaf(17.5f, 27.5f, 5f, Seq())
+    val inserted = quad.insert(b)
+    inserted match {
+      case q: Fork =>
+        assert(q.mass == b.mass, s"${q.mass} should be ${b.mass}")
+      case _ =>
+        fail("Leaf.insert(b) should return a new Fork")
+    }
+  }
   // test cases for Body
 
   test("Body.updated should do nothing for Empty quad trees") {
